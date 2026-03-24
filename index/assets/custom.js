@@ -1237,55 +1237,76 @@ scene.add(sparkLightLeft);
   let mixer = null;
   let modelRoot = null;
 
-  loader.load(
-    "./gearbox.glb",
-    (gltf) => {
-      console.log("GLB loaded successfully", gltf);
-      modelRoot = gltf.scene;
-      scene.add(modelRoot);
+  const onGearboxLoaded = (gltf) => {
+    console.log("GLB loaded successfully", gltf);
+    modelRoot = gltf.scene;
+    scene.add(modelRoot);
 
-      const box = new THREE.Box3().setFromObject(modelRoot);
-      const center = box.getCenter(new THREE.Vector3());
-      modelRoot.position.sub(center);
+    const box = new THREE.Box3().setFromObject(modelRoot);
+    const center = box.getCenter(new THREE.Vector3());
+    modelRoot.position.sub(center);
 
-      modelRoot.position.x += 0.35;
-      modelRoot.position.y -= 0.28;
+    modelRoot.position.x += 0.35;
+    modelRoot.position.y -= 0.28;
 
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
 
-      camera.position.set(0.35, maxDim * 0.18, maxDim * 1.55);
-      camera.near = 0.01;
-      camera.far = Math.max(200, maxDim * 30);
-      camera.updateProjectionMatrix();
+    camera.position.set(0.35, maxDim * 0.18, maxDim * 1.55);
+    camera.near = 0.01;
+    camera.far = Math.max(200, maxDim * 30);
+    camera.updateProjectionMatrix();
 
-      controls.target.set(0.35, -0.12, 0);
-      controls.minDistance = maxDim * 0.75;
-      controls.maxDistance = maxDim * 3.2;
-      controls.update();
+    controls.target.set(0.35, -0.12, 0);
+    controls.minDistance = maxDim * 0.75;
+    controls.maxDistance = maxDim * 3.2;
+    controls.update();
 
-      if (gltf.animations && gltf.animations.length) {
-        mixer = new THREE.AnimationMixer(modelRoot);
+    if (gltf.animations && gltf.animations.length) {
+      mixer = new THREE.AnimationMixer(modelRoot);
 
-        gltf.animations.forEach((clip) => {
-          const action = mixer.clipAction(clip);
-          action.reset();
-          action.play();
-        });
+      gltf.animations.forEach((clip) => {
+        const action = mixer.clipAction(clip);
+        action.reset();
+        action.play();
+      });
 
-        console.log(
-          "Animations found:",
-          gltf.animations.map((a) => a.name)
-        );
-      } else {
-        console.log("No animations found in GLB");
-      }
-    },
-    undefined,
-    (error) => {
-      console.error("Failed to load gearbox.glb", error);
+      console.log(
+        "Animations found:",
+        gltf.animations.map((a) => a.name),
+      );
+    } else {
+      console.log("No animations found in GLB");
     }
+  };
+
+  const gearboxCandidates = Array.from(
+    new Set([
+      new URL("./gearbox.glb", window.location.href).toString(),
+      new URL("./index/gearbox.glb", window.location.href).toString(),
+      new URL("../gearbox.glb", window.location.href).toString(),
+    ]),
   );
+
+  (function loadGearboxFromCandidates(index) {
+    const url = gearboxCandidates[index];
+    if (!url) {
+      console.error("Failed to load gearbox.glb", {
+        attempted: gearboxCandidates,
+      });
+      return;
+    }
+
+    loader.load(
+      url,
+      onGearboxLoaded,
+      undefined,
+      (error) => {
+        loadGearboxFromCandidates(index + 1);
+        console.warn("Failed to load gearbox.glb candidate", url, error);
+      },
+    );
+  })(0);
 
   function resize() {
     if (!wrap) return;
@@ -1365,6 +1386,51 @@ renderer.render(scene, camera);
         element.classList.add("site-home-copy-clean");
       }
     });
+
+    syncHomepageHeroTitleBranding();
+  }
+
+  function syncHomepageHeroTitleBranding() {
+    if (currentPath !== "index.html") {
+      return;
+    }
+
+    const visibleTitle = Array.from(
+      document.querySelectorAll(".uzhnaq-10mrn1k"),
+    )
+      .filter(
+        (element) => element instanceof HTMLElement && isRenderable(element),
+      )
+      .find((element) =>
+        /passion.*precision.*performa/i.test(
+          (element.textContent || "").replace(/\s+/g, "").toLowerCase(),
+        ),
+      );
+
+    if (!(visibleTitle instanceof HTMLElement)) {
+      return;
+    }
+
+    const contrastPanel = visibleTitle.closest(".uzhnaq-1gltdb");
+    if (contrastPanel instanceof HTMLElement) {
+      contrastPanel.classList.add("site-home-hero-contrast-panel");
+    }
+
+    const existingLogo = visibleTitle.querySelector(
+      ":scope > .site-home-hero-title-logo",
+    );
+    if (existingLogo instanceof HTMLImageElement) {
+      return;
+    }
+
+    const logo = document.createElement("img");
+    logo.className = "site-home-hero-title-logo";
+    logo.src = "./colored-logo.svg";
+    logo.alt = "UZHNAQ";
+    logo.loading = "eager";
+    logo.decoding = "async";
+
+    visibleTitle.prepend(logo);
   }
 
   function buildAboutHeroSlideStyle(slide) {
@@ -2614,7 +2680,15 @@ renderer.render(scene, camera);
     });
 
     visibleTitle.classList.add("site-home-title-has-loader");
-    visibleTitle.prepend(ajaxLoad);
+
+    const titleLogo = visibleTitle.querySelector(
+      ":scope > .site-home-hero-title-logo",
+    );
+    if (titleLogo instanceof HTMLElement) {
+      titleLogo.insertAdjacentElement("afterend", ajaxLoad);
+    } else {
+      visibleTitle.prepend(ajaxLoad);
+    }
   }
 
   function buildYouTubeEmbed(video) {
@@ -4010,7 +4084,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ensureMobileHeaderButtonsStable();
   initCarouselControlsFallback();
-  replaceGlobalMapWithStaticImage();
+  if (typeof replaceGlobalMapWithStaticImage === "function") {
+    replaceGlobalMapWithStaticImage();
+  }
   window.addEventListener('resize', ensureMobileHeaderButtonsStable);
 });
 
@@ -4105,8 +4181,4 @@ window.addEventListener("resize", () => {
       section.__staticTechCarousel.refresh();
     }
   });
-
-  if (typeof window.dispatchEvent === "function") {
-    window.dispatchEvent(new Event("resize"));
-  }
 });
