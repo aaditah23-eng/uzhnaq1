@@ -1107,13 +1107,19 @@ document.addEventListener("DOMContentLoaded", () => {
   placeholder.classList.add("site-home-hero-machine-mount");
   placeholder.dataset.siteHomeHeroMachineMounted = "true";
   placeholder.style.display = "flex";
-  placeholder.innerHTML = `
-    <div class="site-home-hero-3d-wrap">
-      <canvas id="gearbox-canvas" class="site-home-hero-3d-model"></canvas>
-    </div>
-  `;
+
+  if (!placeholder.querySelector("#gearbox-canvas")) {
+    placeholder.innerHTML = `
+      <div class="site-home-hero-3d-wrap">
+        <canvas id="gearbox-canvas" class="site-home-hero-3d-model"></canvas>
+      </div>
+    `;
+  }
 
   if (window.__gearboxThreeInitialized) {
+    if (typeof window.__gearboxThreeResize === "function") {
+      window.__gearboxThreeResize();
+    }
     return;
   }
   window.__gearboxThreeInitialized = true;
@@ -1174,65 +1180,6 @@ async function initGearboxThree() {
   const loader = new GLTFLoader();
   const clock = new THREE.Clock();
 
-  const sparkCount = 120;
-const sparkPositions = new Float32Array(sparkCount * 3);
-const sparkVelocities = new Float32Array(sparkCount * 3);
-const sparkLife = new Float32Array(sparkCount);
-
-const sparkGeometry = new THREE.BufferGeometry();
-const sparkMaterial = new THREE.PointsMaterial({
-  color: 0xffaa33,
-  size: 0.06,
-  transparent: true,
-  opacity: 1,
-  depthWrite: false,
-  depthTest: false,
-  blending: THREE.AdditiveBlending,
-  sizeAttenuation: true,
-});
-
-const sparkOriginRight = new THREE.Vector3(0.45, 0.18, 0.42);
-const sparkOriginLeft = new THREE.Vector3(-0.45, 0.18, 0.42);
-
-function resetSpark(i) {
-  const i3 = i * 3;
-  const origin = i < sparkCount / 2 ? sparkOriginRight : sparkOriginLeft;
-  const direction = i < sparkCount / 2 ? 1 : -1;
-
-  sparkPositions[i3] = origin.x + (Math.random() - 0.5) * 0.08;
-  sparkPositions[i3 + 1] = origin.y + (Math.random() - 0.5) * 0.08;
-  sparkPositions[i3 + 2] = origin.z + (Math.random() - 0.5) * 0.05;
-
-  sparkVelocities[i3] = direction * (0.8 + Math.random() * 1.6);
-  sparkVelocities[i3 + 1] = (Math.random() - 0.2) * 1.2;
-  sparkVelocities[i3 + 2] = (Math.random() - 0.5) * 0.6;
-
-  sparkLife[i] = 0.25 + Math.random() * 0.5;
-}
-
-for (let i = 0; i < sparkCount; i++) {
-  resetSpark(i);
-}
-
-sparkGeometry.setAttribute(
-  "position",
-  new THREE.BufferAttribute(sparkPositions, 3)
-);
-
-const sparks = new THREE.Points(sparkGeometry, sparkMaterial);
-sparks.visible = true;
-sparks.renderOrder = 999;
-sparks.frustumCulled = false;
-scene.add(sparks);
-
-const sparkLightRight = new THREE.PointLight(0xff8833, 2.2, 3.2);
-sparkLightRight.position.copy(sparkOriginRight);
-scene.add(sparkLightRight);
-
-const sparkLightLeft = new THREE.PointLight(0xff8833, 2.2, 3.2);
-sparkLightLeft.position.copy(sparkOriginLeft);
-scene.add(sparkLightLeft);
-
 
   let mixer = null;
   let modelRoot = null;
@@ -1246,20 +1193,22 @@ scene.add(sparkLightLeft);
     const center = box.getCenter(new THREE.Vector3());
     modelRoot.position.sub(center);
 
-    modelRoot.position.x += 0.35;
-    modelRoot.position.y -= 0.28;
+    modelRoot.position.x += 0.64;
+    modelRoot.position.y -= 0.22;
+
+    modelRoot.scale.setScalar(1.22);
 
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+    const maxDim = Math.max(size.x, size.y, size.z) * 1.22;
 
-    camera.position.set(0.35, maxDim * 0.18, maxDim * 1.55);
+    camera.position.set(0.9, maxDim * 0.16, maxDim * 1.28);
     camera.near = 0.01;
     camera.far = Math.max(200, maxDim * 30);
     camera.updateProjectionMatrix();
 
-    controls.target.set(0.35, -0.12, 0);
-    controls.minDistance = maxDim * 0.75;
-    controls.maxDistance = maxDim * 3.2;
+    controls.target.set(0.58, -0.06, 0);
+    controls.minDistance = maxDim * 0.68;
+    controls.maxDistance = maxDim * 2.8;
     controls.update();
 
     if (gltf.animations && gltf.animations.length) {
@@ -1282,9 +1231,8 @@ scene.add(sparkLightLeft);
 
   const gearboxCandidates = Array.from(
     new Set([
-      new URL("./gearbox.glb", window.location.href).toString(),
-      new URL("./index/gearbox.glb", window.location.href).toString(),
-      new URL("../gearbox.glb", window.location.href).toString(),
+      new URL("./assets/gearbox.glb", window.location.href).toString(),
+      new URL("gearbox.glb", window.location.href).toString(),
     ]),
   );
 
@@ -1316,41 +1264,20 @@ scene.add(sparkLightLeft);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   }
 
+  window.__gearboxThreeResize = resize;
   window.addEventListener("resize", resize);
-
-  function updateSparks(delta) {
-  for (let i = 0; i < sparkCount; i++) {
-    const i3 = i * 3;
-
-    sparkLife[i] -= delta;
-
-    if (sparkLife[i] <= 0) {
-      resetSpark(i);
-      continue;
-    }
-
-    sparkPositions[i3] += sparkVelocities[i3] * delta;
-    sparkPositions[i3 + 1] += sparkVelocities[i3 + 1] * delta;
-    sparkPositions[i3 + 2] += sparkVelocities[i3 + 2] * delta;
-
-    sparkVelocities[i3 + 1] -= 1.8 * delta;
-  }
-
-  sparkGeometry.attributes.position.needsUpdate = true;
-}
 
   function animate() {
     requestAnimationFrame(animate);
 
     const delta = clock.getDelta();
-if (mixer) mixer.update(delta);
+    if (mixer) mixer.update(delta);
 
-updateSparks(delta);
-
-controls.update();
-renderer.render(scene, camera);
+    controls.update();
+    renderer.render(scene, camera);
   }
 
   resize();
@@ -3358,6 +3285,14 @@ renderer.render(scene, camera);
       }
     }
 
+    if (nextMode === "accordion") {
+      state.isOpen = false;
+      state.trigger.setAttribute("aria-expanded", "false");
+      state.dropdown.setAttribute("aria-hidden", "true");
+      state.dropdown.classList.remove("visible");
+      return;
+    }
+
     if (!state.isOpen) {
       state.trigger.setAttribute("aria-expanded", "false");
       state.dropdown.setAttribute("aria-hidden", "true");
@@ -3410,6 +3345,11 @@ renderer.render(scene, camera);
       return;
     }
 
+    if (isCompactNavigationMode()) {
+      closeResponsiveDropdown(state);
+      return;
+    }
+
     responsiveDropdownStates.forEach((otherState) => {
       if (otherState !== state) {
         closeResponsiveDropdown(otherState);
@@ -3438,6 +3378,34 @@ renderer.render(scene, camera);
     state.trigger.setAttribute("aria-expanded", "false");
     state.dropdown.setAttribute("aria-hidden", "true");
     state.dropdown.classList.remove("visible");
+  }
+
+  function cleanupMobileNoise() {
+    if (window.innerWidth > 809.98) {
+      return;
+    }
+
+    document.querySelectorAll(".premium-dropdown").forEach((dropdown) => {
+      if (dropdown instanceof HTMLElement) {
+        dropdown.classList.remove("visible");
+        dropdown.setAttribute("aria-hidden", "true");
+      }
+    });
+
+    document.querySelectorAll("section, div, nav, aside").forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+
+      var text = (node.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text) {
+        return;
+      }
+
+      if (/^community join events experts$/i.test(text) || /^community\s+join\s+events\s+experts$/i.test(text)) {
+        node.style.display = "none";
+      }
+    });
   }
 
   function toggleResponsiveDropdown(state) {
@@ -3986,6 +3954,115 @@ document.addEventListener("DOMContentLoaded", () => {
     links.style.display = isMobileViewport() ? 'grid' : 'none';
   }
 
+  function ensureMobileHeaderBranding() {
+    const phoneNav = document.querySelector('nav[data-uzhnaq-name="Phone"]');
+    if (!(phoneNav instanceof HTMLElement)) return;
+
+    let links = phoneNav.querySelector('.site-mobile-header-links');
+    if (!(links instanceof HTMLElement)) {
+      links = document.createElement('div');
+      links.className = 'site-mobile-header-links';
+      phoneNav.appendChild(links);
+    }
+
+    let branding = phoneNav.querySelector(':scope > .site-mobile-branding');
+    if (!(branding instanceof HTMLElement)) {
+      branding = document.createElement('div');
+      branding.className = 'site-mobile-branding';
+      branding.innerHTML = `
+        <img class="site-mobile-branding-logo" src="${pagePrefix}assets/source/brand/logo/horizontal/png white.png" alt="UZHNAQ" loading="eager" decoding="async">
+      `;
+      phoneNav.prepend(branding);
+    } else {
+      const image = branding.querySelector('.site-mobile-branding-logo');
+      if (image instanceof HTMLImageElement) {
+        image.src = `${pagePrefix}assets/source/brand/logo/horizontal/png white.png`;
+      }
+    }
+
+    if (branding.nextElementSibling !== links) {
+      phoneNav.insertBefore(branding, links);
+    }
+
+    branding.style.display = isMobileViewport() ? 'inline-flex' : 'none';
+  }
+
+  function ensureMobileHeroTitleLogo() {
+    const title = Array.from(document.querySelectorAll('[data-uzhnaq-component-type="RichTextContainer"]'))
+      .filter((element) => element instanceof HTMLElement)
+      .find((element) => /passion.*precision.*performa/i.test((element.textContent || '').replace(/\s+/g, '').toLowerCase()));
+    if (!(title instanceof HTMLElement)) return;
+
+    let logo = title.querySelector(':scope > .site-home-hero-title-logo');
+    if (!(logo instanceof HTMLImageElement)) {
+      logo = document.createElement('img');
+      logo.className = 'site-home-hero-title-logo';
+      logo.src = `${pagePrefix}assets/source/brand/logo/submark/colored.svg`;
+      logo.alt = 'UZHNAQ';
+      logo.loading = 'eager';
+      logo.decoding = 'async';
+      title.prepend(logo);
+    }
+
+    logo.style.display = isMobileViewport() ? 'block' : '';
+  }
+
+  function cleanupMobileDuplicateButtons() {
+    if (!isMobileViewport()) {
+      document.querySelectorAll('[data-site-mobile-duplicate-hidden="true"]').forEach((element) => {
+        if (element instanceof HTMLElement) {
+          element.style.display = '';
+          element.removeAttribute('data-site-mobile-duplicate-hidden');
+        }
+      });
+      return;
+    }
+
+    const phoneNav = document.querySelector('nav[data-uzhnaq-name="Phone"]');
+    const blockedLabels = [/^home$/i, /^industries served$/i, /^machine suite$/i, /^enquire now$/i];
+    const navBottom = phoneNav instanceof HTMLElement ? phoneNav.getBoundingClientRect().bottom : 0;
+
+    document.querySelectorAll('a, button, [role="button"], [data-highlight="true"]').forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      if (phoneNav instanceof HTMLElement && phoneNav.contains(node)) return;
+
+      const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) return;
+      if (!blockedLabels.some((pattern) => pattern.test(text))) return;
+
+      const shell = node.closest('.site-nav-item-shell, .site-machines-action, .uzhnaq-P5nft, .uzhnaq-cAYtB, .uzhnaq-NZlgR, [data-highlight="true"]') || node;
+      if (!(shell instanceof HTMLElement)) return;
+      if (phoneNav instanceof HTMLElement && phoneNav.contains(shell)) return;
+      const shellRect = shell.getBoundingClientRect();
+      if (shellRect.bottom <= navBottom + 8) return;
+
+      shell.style.display = 'none';
+      shell.setAttribute('data-site-mobile-duplicate-hidden', 'true');
+    });
+  }
+
+  function removeLeakingMobileNavBlocks() {
+    if (!isMobileViewport()) {
+      return;
+    }
+
+    const selectors = [
+      '.uzhnaq-ou6vy8[data-uzhnaq-name="Links"]',
+      '.uzhnaq-b96owu',
+      '.uzhnaq-u9ijng-container',
+      '.uzhnaq-t2ik4q-container',
+      '.uzhnaq-z2qdvv',
+      '.uzhnaq-1sbresw-container'
+    ];
+
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        node.remove();
+      });
+    });
+  }
+
   function initCarouselControlsFallback() {
     const controlsList = Array.from(document.querySelectorAll('.uzhnaq--slideshow-controls'));
     controlsList.forEach((controls) => {
@@ -4083,11 +4160,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   ensureMobileHeaderButtonsStable();
+  ensureMobileHeaderBranding();
+  ensureMobileHeroTitleLogo();
+  cleanupMobileDuplicateButtons();
+  removeLeakingMobileNavBlocks();
   initCarouselControlsFallback();
   if (typeof replaceGlobalMapWithStaticImage === "function") {
     replaceGlobalMapWithStaticImage();
   }
   window.addEventListener('resize', ensureMobileHeaderButtonsStable);
+  window.addEventListener('resize', ensureMobileHeaderBranding);
+  window.addEventListener('resize', ensureMobileHeroTitleLogo);
+  window.addEventListener('resize', cleanupMobileDuplicateButtons);
+  window.addEventListener('resize', removeLeakingMobileNavBlocks);
+  window.setTimeout(removeLeakingMobileNavBlocks, 120);
+  window.setTimeout(removeLeakingMobileNavBlocks, 500);
 });
 
 (function () {
@@ -4164,9 +4251,13 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("DOMContentLoaded", decorateExistingTriggers, { once: true });
   } else {
     decorateExistingTriggers();
+    cleanupMobileNoise();
   }
 
-  window.addEventListener("load", decorateExistingTriggers, { once: true });
+  window.addEventListener("load", function () {
+    decorateExistingTriggers();
+    cleanupMobileNoise();
+  }, { once: true });
   document.addEventListener("click", navigate, true);
   document.addEventListener("keydown", function (event) {
     if (event.key === "Enter" || event.key === " ") {
@@ -4181,4 +4272,20 @@ window.addEventListener("resize", () => {
       section.__staticTechCarousel.refresh();
     }
   });
+
+  if (typeof cleanupMobileNoise === "function") {
+    cleanupMobileNoise();
+  }
+});
+
+window.addEventListener("load", () => {
+  document.querySelectorAll("section").forEach((section) => {
+    if (section && section.__staticTechCarousel && typeof section.__staticTechCarousel.refresh === "function") {
+      section.__staticTechCarousel.refresh();
+    }
+  });
+
+  if (typeof cleanupMobileNoise === "function") {
+    cleanupMobileNoise();
+  }
 });
